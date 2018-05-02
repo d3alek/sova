@@ -10,11 +10,13 @@ def indent(amount, text):
 
 def parse(entity, one_yaml):
     parsed = ""
-    for instance in entity.iterdir():
+    instances = [*entity.iterdir()]
+    if len(instances) > 0:
         parsed += indent(0, entity.stem + ':') + '\n'
-        parsed += indent(4, '- &' + instance.stem) + '\n'
-        parsed += indent(8, 'name: ' + instance.stem) + '\n'
-        parsed += indent(8, instance.read_text()) + '\n'
+        for instance in instances:
+            parsed += indent(4, '- &' + instance.stem) + '\n'
+            parsed += indent(8, 'name: ' + instance.stem) + '\n'
+            parsed += indent(8, instance.read_text()) + '\n'
 
     return parsed
 
