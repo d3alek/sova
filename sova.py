@@ -2,8 +2,12 @@ from pathlib import Path
 import textwrap
 import re
 import io 
+import datetime
 
 from ruamel.yaml import YAML
+import subprocess
+
+VERSION='0.1'
 
 def indent(amount, text):
     return textwrap.indent(text, amount*' ')
@@ -36,11 +40,9 @@ def load():
 
     yaml = YAML()
     model = yaml.load(one_yaml)
-    print('Loaded model with %d items' % len(model.items()))
-
     return model
 
-def save(model):
+def save(model, what, author, **commit_params):
     yaml = YAML()
     output = io.StringIO()
     yaml.dump(model, output)
@@ -67,8 +69,37 @@ def save(model):
                 f.write(textwrap.dedent(instance_content).strip())
                 files_count += 1
 
-    print("Saved model in %s files" % files_count)
+    ret = subprocess.run(['git', '-C', 'garden', 'status', '-s'], stdout=subprocess.PIPE)
+    result = ret.stdout.decode('utf-8')
+
+    if not result:
+        print("No changes to commit.")
+        return
+
+    print(result)
+
+    ret = subprocess.run(['git', '-C', 'garden', 'add', '--all'], stdout=subprocess.PIPE)
+    result = ret.stdout.decode('utf-8')
+
+    assert not result, "Expecting no stdout from %s" % ret
+
+    message = what + '\n\n' 
+    message += '\n'.join(['%s: %s' % (key, value) for key, value in sorted(commit_params.items())])
+    author = "{name} <{email}>".format(**author)
+    ret = subprocess.run(['git', '-C', 'garden', 'commit', '--author', author, '-m', message], stdout=subprocess.PIPE)
+    result = ret.stdout.decode('utf-8')
+    print(result)
+
+def help_adding(entity_type):
+    found = list(filter(lambda f: f.stem == entity_type, Path('templates').iterdir()))
+    assert found, "Did not find template for %s" % entity_type
+    return found[0].read_text()
 
 if __name__ == '__main__':
     model = load()
-    save(model)
+
+    save(model,
+         author={
+             'name': 'sova v' + VERSION,
+             'email': 'sova@otselo.eu'},
+         what='normalizing repo')
