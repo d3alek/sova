@@ -1,27 +1,10 @@
 from pathlib import Path
-import textwrap
-import re
-import io 
 import datetime
 
 from ruamel.yaml import YAML
 import subprocess
 
-VERSION='0.1'
-
-def indent(amount, text):
-    return textwrap.indent(text, amount*' ')
-
-def parse(entity, one_yaml):
-    parsed = ""
-    instances = [*entity.iterdir()]
-    if len(instances) > 0:
-        parsed += indent(0, entity.stem + ':') + '\n'
-        for instance in instances:
-            parsed += indent(4, instance.stem + ":") + '\n'
-            parsed += indent(8, instance.read_text()) + '\n'
-
-    return parsed
+VERSION='0.2'
 
 def load():
     model = {}
@@ -36,42 +19,16 @@ def load():
 
     return model
 
-def split_into_instance_dumps(s):
-    instance_dumps = []
-    entity_matches = [*re.finditer('^([\w-]+):\n', s, flags=re.MULTILINE)]
-
-    for entity_match, next_entity_match in zip(entity_matches, entity_matches[1:] + [None]):
-        entity = entity_match.group(1)
-        content_end = next_entity_match.start() if next_entity_match else None
-        #TODO fix parsing here
-        entity_content = textwrap.dedent(s[entity_match.end():content_end])
-        instance_matches = [*re.finditer('^([\w-]+):\n', entity_content, flags=re.MULTILINE)]
-        if len(instance_matches) < 1:
-            raise RuntimeError("Expected at least 1 instance in %s: %s" % (entity_match, entity_content))
-        for instance_match, next_instance_match in zip(instance_matches, instance_matches[1:] + [None]):
-            instance = instance_match.group(1)
-            content_end = next_instance_match.start() if next_instance_match else None
-            instance_content = textwrap.dedent(entity_content[instance_match.end():content_end]).strip()
-
-            instance_dumps.append((entity, instance, instance_content))
-
-    return instance_dumps
-
 def save(model, what, author, dryrun=False, **commit_params):
     yaml = YAML()
-    output = io.StringIO()
-    yaml.dump(model, output)
-    s = output.getvalue()
-
-    instance_dumps = split_into_instance_dumps(s)
-
-    for entity, instance_name, content in instance_dumps:
-        file_path = (Path('garden') / entity / instance_name).with_suffix('.yaml')
-        if dryrun:
-            print("dryrun: Writing to %s:\n%s" % (file_path, content))
-        else:
-            with file_path.open('w') as f:
-                f.write(content)
+    for entity, instances in model.items():
+        for instance, value in instances.items():
+                file_path = (Path('garden') / entity / instance).with_suffix('.yaml')
+                if dryrun:
+                    print("dryrun: Writing to %s:\n%s" % (file_path, value))
+                else:
+                    with file_path.open('w') as f:
+                        yaml.dump(value, f)
 
     ret = subprocess.run(['git', '-C', 'garden', 'status', '-s'], stdout=subprocess.PIPE)
     result = ret.stdout.decode('utf-8')
@@ -81,6 +38,10 @@ def save(model, what, author, dryrun=False, **commit_params):
         return
 
     print(result)
+
+    if dryrun:
+        print("Stopping because this is dryrun")
+        return
 
     ret = subprocess.run(['git', '-C', 'garden', 'add', '--all'], stdout=subprocess.PIPE)
     result = ret.stdout.decode('utf-8')
@@ -100,10 +61,16 @@ def help_adding(entity_type):
     return found[0].read_text()
 
 if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--dryrun', action='store_true')
+    args = parser.parse_args()
+
     model = load()
 
     save(model,
          author={
              'name': 'sova v' + VERSION,
              'email': 'sova@otselo.eu'},
-         what='normalizing repo')
+         what='normalizing repo',
+         dryrun=args.dryrun)
