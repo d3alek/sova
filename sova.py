@@ -24,23 +24,16 @@ def parse(entity, one_yaml):
     return parsed
 
 def load():
-    one_yaml = ""
-    entities = {e.stem: e for e in Path('garden').iterdir()}
-    one_yaml += (
-            parse(entities.pop('plots'), one_yaml)
-        + parse(entities.pop('beds'), one_yaml)
-        + parse(entities.pop('plants'), one_yaml)
-        + parse(entities.pop('plantings'), one_yaml)
-        + parse(entities.pop('knowledge'), one_yaml))
-
-    entities.pop('.git')
-
-    if entities:
-        raise RuntimeError("Remaining unparsed entities:" + str(entities))
-
-    one_yaml = one_yaml.replace('\t', 2*' ')
+    model = {}
     yaml = YAML()
-    model = yaml.load(one_yaml)
+    for entity_path in Path('garden').iterdir():
+        entity = entity_path.stem
+        if entity == '.git':
+            continue
+        for instance_path in entity_path.iterdir():
+            instance = instance_path.stem
+            model.setdefault(entity, {})[instance] = yaml.load(instance_path.read_text())
+
     return model
 
 def split_into_instance_dumps(s):
