@@ -35,7 +35,6 @@ def log(s):
 def edit(contents):
     width=30
     height=60
-    log(contents)
     edit_win = curses.newwin(width, height, 4,1) # TODO determine size from template size
     edit_win.addstr(contents)
     rectangle(stdscr, 3,0, 4+width+1, 1+height+1)
@@ -50,50 +49,12 @@ def edit(contents):
 class GUI():
     def __init__(self, stdscr):
         self.stdscr = stdscr
-        self.model = sova.load()
-
-    def yaml_dump(self, name, instance):
-        #new_model = self.model.copy()
-        #found_key = None
-        ##TODO only works with beds
-        #existing = None
-        #for bed in new_model['beds']:
-        #    if bed['name'] == instance['name']:
-        #        existing = bed
-        #        break
-
-        #if existing:
-        #    new_model['beds'].remove(bed)
-
-        #new_model['beds'].append(instance)
-
-        string = io.StringIO()
-        yaml.dump(instance, string)
-        return string.getvalue()
-
-        #instance_dumps = sova.split_into_instance_dumps(string.getvalue())
-        #for entity, instance_name, content in instance_dumps:
-        #    if instance_name == name:
-        #        return content
-
-        #raise RuntimeError("Could not find %s in %s" % (name, instance_dumps))
-
-    def yaml_load(self, s):
-        #TODO only works for beds and plots aliased in them
-        #or better load model (appending s) and extract s from resulting model
-
-        #for plot in self.model['plots']:
-        #    s = s.replace('*{name}'.format(**plot), '\n'+sova.indent(4, self.yaml_dump(plot)))
-        #TODO also, move to sova.load(model, s) (and sova.dump(model, instance) above)
-        return yaml.load(s)
+        self.model = sova.get_model()
 
     def paint_model(self):
         self.stdscr.clear()
-
     
-        log("\n")
         plot = [p for p in self.model['plots'].values()][0]
-        log(plot)
         width, height = plot['width'], plot['height']
         window_height, window_width = self.stdscr.getmaxyx()
         self.width_mod = window_width / width
@@ -126,21 +87,18 @@ class GUI():
         if action == 'add_bed':
             #TODO have an interactive step at first where cursor determines top-left and
             # moving it determines height_width
-            template = sova.help_adding('bed')
+            template = sova.get_template('bed')
             bed_str = edit(template)
             bed = self.yaml_load(bed_str)
-            log('Bed:' + str(bed))
 
             commit_params_template = '\n'.join(['what:', 'when:', 'who:', 'how long:'])
             commit_params_str = edit(commit_params_template)
             commit_params = self.yaml_load(commit_params_str)
-            log('Commit params:' + str(commit_params))
 
             self.model['beds'].append(bed)
             try:
                 self.paint_model()
             except:
-                log("Updated model did not pass validation. Reverting")
                 self.model['beds'].remove(bed)
                 self.paint_model()
             else:
@@ -200,31 +158,26 @@ def main(stdscr):
                 modifiers.append('b')
 
         elif c == ord('i'):
-            #TODO adding bed to this
             new = True
+            beds = gui.model['beds']
             for name, bed_win in gui.bed_windows.items():
                 y, x = stdscr.getyx()
                 if bed_win.enclose(y, x):
                     new = False
-                    log("Enclosing Bed " + name)
-                    beds = gui.model['beds']
                     bed = beds[name]
                     break
 
-            if new:     
-                yaml = sova.help_adding('bed')
-            else:
-                template = gui.yaml_dump(name, bed)
-
-            new_bed = gui.yaml_load(edit(template))
+            template = sova.get_template('bed') if new else sova.dump(bed)
+            #TODO let template be a dict so you can easily fill in default values and divide keys and values
+            new_bed = sova.load(edit(template))
 
             if new:
                 name = new_bed.pop('name')
+
             beds[name] = new_bed
             try:
                 gui.paint_model()
             except:
-                log("Updated model did not pass validation. Reverting")
                 beds.remove(new_bed)
                 if not new:
                     beds.append(bed)
@@ -232,15 +185,13 @@ def main(stdscr):
             else:
                 commit_params_template = '\n'.join(['what: %s bed %s' % ('adding' if new else 'changing', name), 'when:', 'who:', 'how long:'])
                 commit_params_str = edit(commit_params_template)
-                commit_params = gui.yaml_load(commit_params_str)
-                log('Commit params:' + str(commit_params))
+                commit_params = sova.load(commit_params_str)
 
                 sova.save(gui.model, author=AUTHOR, **commit_params)
                 gui.paint_model() # to remove artifacts from sova.save
 
             gui.model['beds']
         pass
-            
 
         #TODO editing
         #TODO adding planting

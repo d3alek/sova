@@ -1,14 +1,15 @@
 from pathlib import Path
 import datetime
+import io
 
 from ruamel.yaml import YAML
 import subprocess
 
 VERSION='0.2'
+yaml = YAML()
 
-def load():
+def get_model():
     model = {}
-    yaml = YAML()
     for entity_path in Path('garden').iterdir():
         entity = entity_path.stem
         if entity == '.git':
@@ -20,7 +21,6 @@ def load():
     return model
 
 def save(model, what, author, dryrun=False, **commit_params):
-    yaml = YAML()
     for entity, instances in model.items():
         for instance, value in instances.items():
                 file_path = (Path('garden') / entity / instance).with_suffix('.yaml')
@@ -55,10 +55,18 @@ def save(model, what, author, dryrun=False, **commit_params):
     result = ret.stdout.decode('utf-8')
     print(result)
 
-def help_adding(entity_type):
+def get_template(entity_type):
     found = list(filter(lambda f: f.stem == entity_type, Path('templates').iterdir()))
     assert found, "Did not find template for %s" % entity_type
     return found[0].read_text()
+
+def dump(instance):
+    string = io.StringIO()
+    yaml.dump(instance, string)
+    return string.getvalue()
+
+def load(s):
+    return yaml.load(s)
 
 if __name__ == '__main__':
     import argparse
