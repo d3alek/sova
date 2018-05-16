@@ -201,38 +201,45 @@ def main(stdscr):
 
         elif c == ord('i'):
             #TODO adding bed to this
+            new = True
             for name, bed_win in gui.bed_windows.items():
                 y, x = stdscr.getyx()
                 if bed_win.enclose(y, x):
-                    log("Enclosing Bed")
-                    log(name)
-                    log("Before update")
-                    log(gui.model['beds'])
+                    new = False
+                    log("Enclosing Bed " + name)
                     beds = gui.model['beds']
                     bed = beds[name]
-                    new_bed = gui.yaml_load(edit(gui.yaml_dump(name, bed)))
-                    beds[name] = new_bed
-                    log(beds)
-                    try:
-                        gui.paint_model()
-                    except:
-                        log("Updated model did not pass validation. Reverting")
-                        beds.remove(new_bed)
-                        beds.append(bed)
-                        log("After update")
-                        log(beds)
-                        gui.paint_model()
-                    else:
-                        commit_params_template = '\n'.join(['what: changing bed %s' % name, 'when:', 'who:', 'how long:'])
-                        commit_params_str = edit(commit_params_template)
-                        commit_params = gui.yaml_load(commit_params_str)
-                        log('Commit params:' + str(commit_params))
+                    break
 
-                        sova.save(gui.model, author=AUTHOR, **commit_params)
-                        gui.paint_model() # to remove artifacts from sova.save
+            if new:     
+                yaml = sova.help_adding('bed')
+            else:
+                template = gui.yaml_dump(name, bed)
 
-                    gui.model['beds']
-            pass
+            new_bed = gui.yaml_load(edit(template))
+
+            if new:
+                name = new_bed.pop('name')
+            beds[name] = new_bed
+            try:
+                gui.paint_model()
+            except:
+                log("Updated model did not pass validation. Reverting")
+                beds.remove(new_bed)
+                if not new:
+                    beds.append(bed)
+                gui.paint_model()
+            else:
+                commit_params_template = '\n'.join(['what: %s bed %s' % ('adding' if new else 'changing', name), 'when:', 'who:', 'how long:'])
+                commit_params_str = edit(commit_params_template)
+                commit_params = gui.yaml_load(commit_params_str)
+                log('Commit params:' + str(commit_params))
+
+                sova.save(gui.model, author=AUTHOR, **commit_params)
+                gui.paint_model() # to remove artifacts from sova.save
+
+            gui.model['beds']
+        pass
             
 
         #TODO editing
